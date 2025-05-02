@@ -2,18 +2,18 @@ import { queryClient } from "~/root";
 import type { Conversation, Message } from "~/types";
 
 export const QueryKeys = {
-	messages: (conversationId: string) => ["messages", conversationId],
 	conversations: () => ["conversations"],
+	messages: (conversationId: string) => ["messages", conversationId],
 };
 
-export function addQueryMessage(message: Message) {
+export function addQueryConversation(conversation: Conversation) {
 	queryClient.setQueryData(
-		QueryKeys.messages(message.conversationId),
-		(prev: Message[] | undefined) => {
-			if (!prev) {
-				return [message];
+		QueryKeys.conversations(),
+		(prev: Conversation[] | undefined) => {
+			if (!prev || !Array.isArray(prev)) {
+				return [conversation];
 			}
-			return [...prev, message];
+			return [...prev, conversation];
 		},
 	);
 }
@@ -21,7 +21,10 @@ export function addQueryMessage(message: Message) {
 export function updateConversationTitle(conversationId: string, title: string) {
 	queryClient.setQueryData(
 		QueryKeys.conversations(),
-		(prev: Conversation[]) => {
+		(prev: Conversation[] | undefined) => {
+			if (!prev || !Array.isArray(prev)) {
+				return [];
+			}
 			return prev.map((conversation) =>
 				conversation.id === conversationId
 					? { ...conversation, title }
@@ -34,8 +37,10 @@ export function updateConversationTitle(conversationId: string, title: string) {
 export function updateConversationUpdatedAt(conversationId: string) {
 	queryClient.setQueryData(
 		QueryKeys.conversations(),
-		(prev: Conversation[]) => {
-			if (!prev) return [];
+		(prev: Conversation[] | undefined) => {
+			if (!prev || !Array.isArray(prev)) {
+				return [];
+			}
 			return prev.map((conversation) =>
 				conversation.id === conversationId
 					? { ...conversation, updatedAt: new Date().toISOString() }
@@ -48,7 +53,10 @@ export function updateConversationUpdatedAt(conversationId: string) {
 export function pinConversation(conversationId: string) {
 	queryClient.setQueryData(
 		QueryKeys.conversations(),
-		(prev: Conversation[]) => {
+		(prev: Conversation[] | undefined) => {
+			if (!prev || !Array.isArray(prev)) {
+				return [];
+			}
 			return prev.map((conversation) =>
 				conversation.id === conversationId
 					? { ...conversation, pinned: true }
@@ -61,12 +69,27 @@ export function pinConversation(conversationId: string) {
 export function unpinConversation(conversationId: string) {
 	queryClient.setQueryData(
 		QueryKeys.conversations(),
-		(prev: Conversation[]) => {
+		(prev: Conversation[] | undefined) => {
+			if (!prev || !Array.isArray(prev)) {
+				return [];
+			}
 			return prev.map((conversation) =>
 				conversation.id === conversationId
 					? { ...conversation, pinned: false }
 					: conversation,
 			);
+		},
+	);
+}
+
+export function addQueryMessage(message: Message) {
+	queryClient.setQueryData(
+		QueryKeys.messages(message.conversationId),
+		(prev: Message[] | undefined) => {
+			if (!prev || !Array.isArray(prev)) {
+				return [message];
+			}
+			return [...prev, message];
 		},
 	);
 }

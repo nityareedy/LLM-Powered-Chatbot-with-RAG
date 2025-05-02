@@ -14,12 +14,11 @@ import { RiArrowUpLine } from "react-icons/ri";
 import { WebSocketClient } from "~/lib/websocket";
 import { useChatStore } from "~/stores/chat";
 import {
+	addQueryConversation,
 	addQueryMessage,
-	QueryKeys,
 	updateConversationUpdatedAt,
 } from "~/utils/query";
-import { stripProtoMetadata, type Conversation } from "~/types";
-import { queryClient } from "~/root";
+import { stripProtoMetadata } from "~/types";
 
 export function ChatInput() {
 	const [isComposing, setIsComposing] = useState(false);
@@ -35,14 +34,8 @@ export function ChatInput() {
 		},
 		onSettled(data, error, variables, context) {
 			if (data) {
-				queryClient.setQueryData(
-					QueryKeys.conversations(),
-					(prev: Conversation[]) => {
-						if (!prev) return [data];
-						return [data, ...prev];
-					},
-				);
 				setConversationId(data.id);
+				addQueryConversation(data);
 			}
 		},
 	});

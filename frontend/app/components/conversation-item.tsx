@@ -8,7 +8,6 @@ import {
 
 import { chatClient } from "~/connect";
 import { queryClient } from "~/root";
-import { handleSelectConversation } from "~/routes/home";
 import { useChatStore } from "~/stores/chat";
 import { useUIStore } from "~/stores/ui";
 import type { Conversation } from "~/types";
@@ -18,11 +17,11 @@ import { pinConversation } from "~/utils/query";
 export function ConversationItem({
 	conversation,
 	containerRef,
-	closeMenuRef,
+	closeRef,
 }: {
 	conversation: Conversation;
 	containerRef?: React.RefObject<HTMLDivElement>;
-	closeMenuRef?: React.RefObject<HTMLButtonElement>;
+	closeRef?: React.RefObject<HTMLButtonElement>;
 }) {
 	const { conversationId, setConversationId } = useChatStore();
 
@@ -32,7 +31,12 @@ export function ConversationItem({
 
 	function doWithCloseMenu(fn: () => void) {
 		fn();
-		closeMenuRef?.current?.click();
+		closeRef?.current?.click();
+	}
+
+	function handleSelectConversation(conversationId: string) {
+		useChatStore.getState().setConversationId(conversationId);
+		document.getElementById("chat-input")?.focus();
 	}
 
 	function handleDeleteConversation() {
