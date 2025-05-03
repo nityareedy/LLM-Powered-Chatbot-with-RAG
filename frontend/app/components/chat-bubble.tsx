@@ -85,58 +85,56 @@ export function UserBubble({ message }: ChatBubbleProps) {
 export function RobotBubble({ message }: ChatBubbleProps) {
 	const [isPlaying, setIsPlaying] = useState(false);
 	const audioRef = useRef<HTMLAudioElement | null>(null);
+	const isPlayingRef = useRef(false);
 
-	function playAudio() {
-		if (isPlaying) {
+	async function playAudio() {
+		if (isPlayingRef.current) {
 			stopAudio();
 			return;
 		}
 		setIsPlaying(true);
-		const mediaSource = new MediaSource();
-		const audio = new Audio();
-		audioRef.current = audio;
-		audio.src = URL.createObjectURL(mediaSource);
-		mediaSource.addEventListener("sourceopen", async () => {
-			const sourceBuffer = mediaSource.addSourceBuffer("audio/mpeg");
+		isPlayingRef.current = true;
+		try {
 			const stream = chatClient.streamTTS({
 				text: message.content,
 			});
 			for await (const chunk of stream) {
-				if (sourceBuffer.updating) {
-					await new Promise((resolve) =>
-						sourceBuffer.addEventListener("updateend", resolve, { once: true }),
-					);
+				if (!isPlayingRef.current) {
+					console.log("Playback stopped externally (ref check).");
+					break;
 				}
-				sourceBuffer.appendBuffer(chunk.audio);
+				const audio = new Audio()
+				audioRef.current = audio;
+				const audioSrc = URL.createObjectURL(new Blob([chunk.audio]))
+				audio.src = audioSrc
+				audio.play()
+				await new Promise(resolve => audio.onended = resolve)
+				URL.revokeObjectURL(audioSrc)
+				audioRef.current = null;
+				await new Promise(res => setTimeout(res, 50));
 			}
-			// Wait for the final update to complete before ending the stream
-			if (sourceBuffer.updating) {
-				await new Promise((resolve) =>
-					sourceBuffer.addEventListener("updateend", resolve, { once: true }),
-				);
-			}
-			mediaSource.endOfStream();
-		});
-		audio.onended = () => {
-			audioRef.current = null;
+		} catch (error) {
+			console.error("Error during TTS playback:", error);
+		} finally {
+			isPlayingRef.current = false;
 			setIsPlaying(false);
-		};
-		audio.onerror = () => {
-			audioRef.current = null;
-			if (audio.src) {
-				URL.revokeObjectURL(audio.src);
+			if (audioRef.current) {
+				audioRef.current.pause();
+				audioRef.current.src = '';
+				audioRef.current = null;
 			}
-			setIsPlaying(false);
-		};
-		audio.play();
+		}
 	}
 
 	function stopAudio() {
+		console.log("Stopping audio playback.");
+		isPlayingRef.current = false;
+		setIsPlaying(false);
 		if (audioRef.current) {
 			audioRef.current.pause();
-			audioRef.current.currentTime = 0;
+			audioRef.current.src = '';
+			audioRef.current = null;
 		}
-		setIsPlaying(false);
 	}
 
 	useEffect(() => {

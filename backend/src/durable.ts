@@ -50,7 +50,6 @@ export type WebSocketConversationTitleMessage = {
 	title: string;
 };
 
-
 export type WebSocketClientMessage =
 	| WebSocketChatStreamCreateMessage
 	| WebSocketChatStreamCancelMessage
@@ -60,7 +59,6 @@ export type WebSocketServerMessage =
 	| WebSocketStreamMessage
 	| WebSocketStreamDoneMessage
 	| WebSocketConversationTitleMessage;
-
 
 export class WorkersAIDurableObject extends DurableObject<Env> {
 	db: DrizzleSqliteDODatabase<typeof schema>;
@@ -283,7 +281,7 @@ export class WorkersAIDurableObject extends DurableObject<Env> {
 				return [
 					operators.desc(fields.pinned),
 					operators.desc(fields.updated_at),
-				]
+				];
 			},
 		});
 	}

@@ -1,7 +1,8 @@
 import { env } from "cloudflare:workers";
 import { createContextValues } from "@connectrpc/connect";
 import { create } from "@bufbuild/protobuf";
-import OpenAI from "openai";
+import { z } from "zod";
+import { zodResponseFormat } from "openai/helpers/zod";
 
 import { createWorkerHandler } from "~/connectrpc-handler";
 import {
@@ -17,6 +18,10 @@ import {
 	UnpinConversationResponseSchema,
 } from "~/gen/chat/v1/chat_pb";
 import { envStore } from "~/store-context";
+
+const TTSInputSchema = z.object({
+	chunks: z.array(z.string()),
+});
 
 export const handler = createWorkerHandler({
 	contextValues(req, env, ctx) {
@@ -111,66 +116,51 @@ export const handler = createWorkerHandler({
 			},
 			streamTTS: async function* (req, ctx) {
 				try {
-					const openAI = new OpenAI({
-						apiKey: env.OPENAI_API_KEY,
-					});
-					const response = await openAI.audio.speech.create({
-						model: "gpt-4o-mini-tts",
-						input: req.text,
-						voice: "nova",
-					});
-					const reader = response.body?.getReader();
-					if (!reader) {
-						throw new Error("No reader");
-					}
-
-					const bufferSize = 16 * 1024;
-					let buffer = new Uint8Array(bufferSize);
-					let bufferFill = 0;
-					let finished = false;
-
-					while (!finished) {
-						try {
-							const { done, value } = await reader.read();
-							if (done) {
-								finished = true;
-								if (bufferFill > 0) {
-									yield create(StreamTTSResponseSchema, {
-										audio: buffer.slice(0, bufferFill),
-									});
-								}
-								break;
-							}
-
-							if (value) {
-								let valueOffset = 0;
-								while (valueOffset < value.length) {
-									const spaceInBuffer = bufferSize - bufferFill;
-									const bytesToCopy = Math.min(
-										value.length - valueOffset,
-										spaceInBuffer,
-									);
-
-									buffer.set(
-										value.subarray(valueOffset, valueOffset + bytesToCopy),
-										bufferFill,
-									);
-									bufferFill += bytesToCopy;
-									valueOffset += bytesToCopy;
-
-									if (bufferFill === bufferSize) {
-										yield create(StreamTTSResponseSchema, {
-											audio: buffer,
-										});
-										buffer = new Uint8Array(bufferSize);
-										bufferFill = 0;
-									}
-								}
-							}
-						} catch (readError) {
-							console.error("Error reading from stream:", readError);
-							throw readError;
-						}
+					const response = await env.AI.run(
+						"@cf/meta/llama-3.1-8b-instruct-fast" as unknown as any,
+						{
+							messages: [
+								{
+									role: "system",
+									content: `You are a helpful assistant that converts long text into short chunks for text to speech.
+									Here is the text: ${req.text}
+									`,
+								},
+							],
+							response_format: zodResponseFormat(TTSInputSchema, "tts_input"),
+						},
+						{
+							gateway: {
+								id: env.CLOUDFLARE_AI_GATEWAY_ID,
+								cacheTtl: 60 * 60 * 24 * 30,
+							},
+						},
+					);
+					const {
+						response: { chunks },
+					} = response as unknown as {
+						response: z.infer<typeof TTSInputSchema>;
+					};
+					for (const chunk of chunks) {
+						const response = await env.AI.run(
+							"@cf/myshell-ai/melotts",
+							{
+								prompt: chunk,
+							},
+							{
+								gateway: {
+									id: env.CLOUDFLARE_AI_GATEWAY_ID,
+									cacheTtl: 60 * 60 * 24 * 30,
+								},
+							},
+						);
+						const { audio } = response.valueOf() as {
+							audio: string;
+						};
+						const data = base64ToBytes(audio);
+						yield create(StreamTTSResponseSchema, {
+							audio: data,
+						});
 					}
 				} catch (error) {
 					console.error("Error in streamTTS:", error);
@@ -179,3 +169,8 @@ export const handler = createWorkerHandler({
 		});
 	},
 });
+
+function base64ToBytes(base64: string) {
+	const binString = atob(base64);
+	return Uint8Array.from(binString, (m) => m.codePointAt(0) ?? 0);
+}

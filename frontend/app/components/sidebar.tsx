@@ -9,6 +9,7 @@ import {
 	VStack,
 	Text,
 } from "@chakra-ui/react";
+import { useLocation, useNavigate } from "react-router";
 import { useQuery } from "@tanstack/react-query";
 import { RiBook2Line, RiPushpinLine, RiSearchLine } from "react-icons/ri";
 
@@ -25,6 +26,8 @@ export function SideBar({
 	containerRef?: React.RefObject<HTMLDivElement>;
 	closeRef?: React.RefObject<HTMLButtonElement>;
 }) {
+	const location = useLocation();
+
 	function doWithCloseMenu(fn: () => void) {
 		fn();
 		closeRef?.current?.click();
@@ -75,10 +78,6 @@ export function SideBar({
 				<InputGroup startElement={<Icon as={RiSearchLine} />}>
 					<Input placeholder="Search" size="sm" />
 				</InputGroup>
-				<Button size="sm" variant="subtle" w="full" colorPalette="blue">
-					<Icon as={RiBook2Line} />
-					Knowledges
-				</Button>
 			</VStack>
 			{isLoadingConversations && (
 				<Center flex={1}>
