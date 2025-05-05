@@ -18,8 +18,8 @@ import {
 	addQueryMessage,
 	updateConversationUpdatedAt,
 } from "~/utils/query";
-import { stripProtoMetadata } from "~/types";
 import { toaster } from "~/components/ui/toaster";
+import { stripProtoMetadata } from "~/types";
 
 export function ChatInput() {
 	const [isComposing, setIsComposing] = useState(false);
@@ -40,6 +40,26 @@ export function ChatInput() {
 			if (data) {
 				setConversationId(data.id);
 				addQueryConversation(data);
+			}
+		},
+	});
+
+	const speechToTextMutation = useMutation({
+		mutationFn: async (audio: Uint8Array) => {
+			const response = await chatClient.speechToText({
+				audio,
+			});
+			return response.text;
+		},
+		onSettled(data, error, variables, context) {
+			if (data) {
+				setContent((prev) => prev + data);
+			}
+			if (error) {
+				toaster.error({
+					title: "Speech Recognition Error",
+					description: "An error occurred during speech recognition.",
+				});
 			}
 		},
 	});
@@ -81,7 +101,9 @@ export function ChatInput() {
 			}
 		} else {
 			try {
-				const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+				const stream = await navigator.mediaDevices.getUserMedia({
+					audio: true,
+				});
 				const recorder = new MediaRecorder(stream);
 				mediaRecorderRef.current = recorder;
 				audioChunksRef.current = [];
@@ -106,28 +128,8 @@ export function ChatInput() {
 						console.log("No audio recorded");
 						return;
 					}
-
-					try {
-						const response = await chatClient.speechToText({
-							audio: audioUint8Array,
-						});
-						if (response.text) {
-							setContent((prevContent) => prevContent + response.text);
-						} else {
-							toaster.error({
-								title: "Speech Recognition Failed",
-								description: "Could not recognize speech from the audio.",
-							});
-						}
-					} catch (error) {
-						console.error("Speech-to-text error:", error);
-						toaster.error({
-							title: "Speech Recognition Error",
-							description: "An error occurred during speech recognition.",
-						});
-					}
+					speechToTextMutation.mutateAsync(audioUint8Array);
 				};
-
 				recorder.start();
 				setIsRecording(true);
 			} catch (error) {
@@ -185,7 +187,8 @@ export function ChatInput() {
 						rounded="full"
 						variant="ghost"
 						onClick={handleMicClick}
-						colorScheme={isRecording ? "red" : "gray"}
+						colorPalette={isRecording ? "red" : "gray"}
+						loading={speechToTextMutation.isPending}
 						aria-label={isRecording ? "Stop Recording" : "Start Recording"}
 					>
 						<Icon

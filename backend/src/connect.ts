@@ -170,7 +170,7 @@ export const handler = createWorkerHandler({
 			speechToText: async (req, ctx) => {
 				const result = await env.AI.run("@cf/openai/whisper", {
 					audio: bytesToNumberArray(req.audio),
-				})
+				});
 				return create(SpeechToTextResponseSchema, {
 					text: result.text,
 				});

@@ -103,15 +103,15 @@ export function RobotBubble({ message }: ChatBubbleProps) {
 					console.log("Playback stopped externally (ref check).");
 					break;
 				}
-				const audio = new Audio()
+				const audio = new Audio();
 				audioRef.current = audio;
-				const audioSrc = URL.createObjectURL(new Blob([chunk.audio]))
-				audio.src = audioSrc
-				audio.play()
-				await new Promise(resolve => audio.onended = resolve)
-				URL.revokeObjectURL(audioSrc)
+				const audioSrc = URL.createObjectURL(new Blob([chunk.audio]));
+				audio.src = audioSrc;
+				audio.play();
+				await new Promise((resolve) => (audio.onended = resolve));
+				URL.revokeObjectURL(audioSrc);
 				audioRef.current = null;
-				await new Promise(res => setTimeout(res, 50));
+				await new Promise((res) => setTimeout(res, 50));
 			}
 		} catch (error) {
 			console.error("Error during TTS playback:", error);
@@ -120,7 +120,7 @@ export function RobotBubble({ message }: ChatBubbleProps) {
 			setIsPlaying(false);
 			if (audioRef.current) {
 				audioRef.current.pause();
-				audioRef.current.src = '';
+				audioRef.current.src = "";
 				audioRef.current = null;
 			}
 		}
@@ -132,7 +132,7 @@ export function RobotBubble({ message }: ChatBubbleProps) {
 		setIsPlaying(false);
 		if (audioRef.current) {
 			audioRef.current.pause();
-			audioRef.current.src = '';
+			audioRef.current.src = "";
 			audioRef.current = null;
 		}
 	}
