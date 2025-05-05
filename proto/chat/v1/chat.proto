@@ -12,6 +12,7 @@ service ChatService {
   rpc UnpinConversation(UnpinConversationRequest) returns (UnpinConversationResponse);
   rpc ListMessages(ListMessagesRequest) returns (ListMessagesResponse);
   rpc StreamTTS(StreamTTSRequest) returns (stream StreamTTSResponse);
+  rpc SpeechToText(SpeechToTextRequest) returns (SpeechToTextResponse);
 }
 
 message Model {
@@ -71,7 +72,6 @@ message UnpinConversationRequest {
 
 message UnpinConversationResponse {}
 
-
 message Message {
   string id = 1;
   string conversation_id = 2;
@@ -94,4 +94,12 @@ message StreamTTSRequest {
 
 message StreamTTSResponse {
   bytes audio = 1;
+}
+
+message SpeechToTextRequest {
+  bytes audio = 1;
+}
+
+message SpeechToTextResponse {
+  string text = 1;
 }

@@ -6,11 +6,11 @@ import {
 	IconButton,
 	Icon,
 } from "@chakra-ui/react";
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useMutation } from "@tanstack/react-query";
 
 import { chatClient } from "~/connect";
-import { RiArrowUpLine } from "react-icons/ri";
+import { RiArrowUpLine, RiMicLine, RiRecordCircleLine } from "react-icons/ri";
 import { WebSocketClient } from "~/lib/websocket";
 import { useChatStore } from "~/stores/chat";
 import {
@@ -19,10 +19,14 @@ import {
 	updateConversationUpdatedAt,
 } from "~/utils/query";
 import { stripProtoMetadata } from "~/types";
+import { toaster } from "~/components/ui/toaster";
 
 export function ChatInput() {
 	const [isComposing, setIsComposing] = useState(false);
 	const [content, setContent] = useState("");
+	const [isRecording, setIsRecording] = useState(false);
+	const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+	const audioChunksRef = useRef<Blob[]>([]);
 
 	const webSocket = WebSocketClient.getInstance();
 	const { conversationId, setConversationId, setIsStreaming } = useChatStore();
@@ -70,6 +74,74 @@ export function ChatInput() {
 		setContent("");
 	}
 
+	async function handleMicClick() {
+		if (isRecording) {
+			if (mediaRecorderRef.current) {
+				mediaRecorderRef.current.stop();
+			}
+		} else {
+			try {
+				const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+				const recorder = new MediaRecorder(stream);
+				mediaRecorderRef.current = recorder;
+				audioChunksRef.current = [];
+
+				recorder.ondataavailable = (event) => {
+					if (event.data.size > 0) {
+						audioChunksRef.current.push(event.data);
+					}
+				};
+
+				recorder.onstop = async () => {
+					const audioBlob = new Blob(audioChunksRef.current, {
+						type: "audio/webm",
+					});
+					const audioBuffer = await audioBlob.arrayBuffer();
+					const audioUint8Array = new Uint8Array(audioBuffer);
+
+					stream.getTracks().forEach((track) => track.stop());
+					setIsRecording(false);
+
+					if (audioUint8Array.length === 0) {
+						console.log("No audio recorded");
+						return;
+					}
+
+					try {
+						const response = await chatClient.speechToText({
+							audio: audioUint8Array,
+						});
+						if (response.text) {
+							setContent((prevContent) => prevContent + response.text);
+						} else {
+							toaster.error({
+								title: "Speech Recognition Failed",
+								description: "Could not recognize speech from the audio.",
+							});
+						}
+					} catch (error) {
+						console.error("Speech-to-text error:", error);
+						toaster.error({
+							title: "Speech Recognition Error",
+							description: "An error occurred during speech recognition.",
+						});
+					}
+				};
+
+				recorder.start();
+				setIsRecording(true);
+			} catch (error) {
+				console.error("Error accessing microphone:", error);
+				toaster.error({
+					title: "Microphone Access Denied",
+					description:
+						"Please allow microphone access in your browser settings.",
+				});
+				setIsRecording(false);
+			}
+		}
+	}
+
 	return (
 		<HStack w="full" p={2}>
 			<VStack
@@ -108,6 +180,20 @@ export function ChatInput() {
 					/>
 				</HStack>
 				<HStack w="full" px={1}>
+					<IconButton
+						size="xs"
+						rounded="full"
+						variant="ghost"
+						onClick={handleMicClick}
+						colorScheme={isRecording ? "red" : "gray"}
+						aria-label={isRecording ? "Stop Recording" : "Start Recording"}
+					>
+						<Icon
+							as={isRecording ? RiRecordCircleLine : RiMicLine}
+							size="sm"
+							flexShrink={0}
+						/>
+					</IconButton>
 					<Spacer />
 					<IconButton
 						onClick={handleSendMessage}

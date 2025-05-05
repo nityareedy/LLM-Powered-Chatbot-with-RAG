@@ -14,6 +14,7 @@ import {
 	ListModelsResponseSchema,
 	PinConversationResponseSchema,
 	RenameConversationResponseSchema,
+	SpeechToTextResponseSchema,
 	StreamTTSResponseSchema,
 	UnpinConversationResponseSchema,
 } from "~/gen/chat/v1/chat_pb";
@@ -166,6 +167,14 @@ export const handler = createWorkerHandler({
 					console.error("Error in streamTTS:", error);
 				}
 			},
+			speechToText: async (req, ctx) => {
+				const result = await env.AI.run("@cf/openai/whisper", {
+					audio: bytesToNumberArray(req.audio),
+				})
+				return create(SpeechToTextResponseSchema, {
+					text: result.text,
+				});
+			},
 		});
 	},
 });
@@ -173,4 +182,8 @@ export const handler = createWorkerHandler({
 function base64ToBytes(base64: string) {
 	const binString = atob(base64);
 	return Uint8Array.from(binString, (m) => m.codePointAt(0) ?? 0);
+}
+
+function bytesToNumberArray(bytes: Uint8Array) {
+	return Array.from(bytes).map((byte) => byte);
 }
