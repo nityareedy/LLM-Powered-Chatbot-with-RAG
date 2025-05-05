@@ -93,3 +93,21 @@ export function addQueryMessage(message: Message) {
 		},
 	);
 }
+
+export function removeQueryMessage(message: Message) {
+	queryClient.setQueryData(
+		QueryKeys.messages(message.conversationId),
+		(prev: Message[] | undefined) => {
+			return prev?.filter((m) => m.id !== message.id);
+		},
+	);
+}
+
+export function updateQueryMessage(message: Message) {
+	queryClient.setQueryData(
+		QueryKeys.messages(message.conversationId),
+		(prev: Message[] | undefined) => {
+			return prev?.map((m) => (m.id === message.id ? message : m));
+		},
+	);
+}

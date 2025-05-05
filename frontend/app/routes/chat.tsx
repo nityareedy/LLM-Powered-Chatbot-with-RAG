@@ -46,6 +46,13 @@ export default function Chat() {
 		enabled: !!conversationId,
 	});
 
+	const lastAssistantMessage = messages
+		?.filter((msg) => msg.role === "assistant")
+		.pop();
+	const lastAssistantMessageId = lastAssistantMessage?.id;
+
+	console.log("lastAssistantMessageId: ", lastAssistantMessageId);
+
 	useEffect(() => {
 		messageEndRef.current?.scrollIntoView({ behavior: "instant" });
 	}, [messages, streamContent]);
@@ -86,7 +93,11 @@ export default function Chat() {
 				hidden={!conversationId || isMessagesLoading}
 			>
 				{messages?.map((message) => (
-					<ChatBubble key={message.id} message={message} />
+					<ChatBubble
+						key={message.id}
+						message={message}
+						lastAssistantMessageId={lastAssistantMessageId}
+					/>
 				))}
 				{isStreaming && streamContent !== "" && (
 					<StreamContentBubble streamContent={streamContent} />

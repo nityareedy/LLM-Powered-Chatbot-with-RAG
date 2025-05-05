@@ -7,15 +7,23 @@ import {
 	Clipboard,
 } from "@chakra-ui/react";
 import { useEffect, useRef, useState } from "react";
-import { RiVolumeMuteLine, RiVolumeUpLine } from "react-icons/ri";
+import {
+	RiVolumeMuteLine,
+	RiVolumeUpLine,
+	RiRefreshLine,
+} from "react-icons/ri";
 import ReactMarkdown from "react-markdown";
 
 import { Prose } from "~/components/ui/prose";
 import { chatClient } from "~/connect";
+import { WebSocketClient } from "~/lib/websocket";
+import { useChatStore } from "~/stores/chat";
 import type { Message } from "~/types";
+import { removeQueryMessage, updateConversationUpdatedAt } from "~/utils/query";
 
 interface ChatBubbleProps {
 	message: Message;
+	lastAssistantMessageId?: string;
 }
 
 export function StreamBubble() {
@@ -63,12 +71,20 @@ export function StreamContentBubble({
 	);
 }
 
-export function ChatBubble({ message }: ChatBubbleProps) {
+export function ChatBubble({
+	message,
+	lastAssistantMessageId,
+}: ChatBubbleProps) {
 	switch (message.role) {
 		case "user":
 			return <UserBubble message={message} />;
 		case "assistant":
-			return <RobotBubble message={message} />;
+			return (
+				<RobotBubble
+					message={message}
+					lastAssistantMessageId={lastAssistantMessageId}
+				/>
+			);
 	}
 }
 
@@ -82,10 +98,15 @@ export function UserBubble({ message }: ChatBubbleProps) {
 	);
 }
 
-export function RobotBubble({ message }: ChatBubbleProps) {
+export function RobotBubble({
+	message,
+	lastAssistantMessageId,
+}: ChatBubbleProps) {
 	const [isPlaying, setIsPlaying] = useState(false);
 	const audioRef = useRef<HTMLAudioElement | null>(null);
 	const isPlayingRef = useRef(false);
+
+	const { model, isStreaming, setIsStreaming } = useChatStore();
 
 	async function playAudio() {
 		if (isPlayingRef.current) {
@@ -137,6 +158,18 @@ export function RobotBubble({ message }: ChatBubbleProps) {
 		}
 	}
 
+	function regenerate() {
+		removeQueryMessage(message);
+		updateConversationUpdatedAt(message.conversationId);
+		setIsStreaming(true);
+		WebSocketClient.getInstance().send({
+			type: "chat.regenerate",
+			eventId: message.id,
+			conversationId: message.conversationId,
+			model,
+		});
+	}
+
 	useEffect(() => {
 		return () => {
 			stopAudio();
@@ -171,6 +204,15 @@ export function RobotBubble({ message }: ChatBubbleProps) {
 							</IconButton>
 						</Clipboard.Trigger>
 					</Clipboard.Root>
+					<IconButton
+						variant="ghost"
+						size="xs"
+						color="fg.muted"
+						onClick={regenerate}
+						hidden={message.id !== lastAssistantMessageId || isStreaming}
+					>
+						<Icon as={RiRefreshLine} />
+					</IconButton>
 				</HStack>
 			</VStack>
 		</HStack>

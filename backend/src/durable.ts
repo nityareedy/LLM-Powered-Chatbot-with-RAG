@@ -30,6 +30,13 @@ export type WebSocketChatStreamCancelMessage = {
 	conversationId: string;
 };
 
+export type WebSocketChatRegenerateMessage = {
+	type: "chat.regenerate";
+	eventId: string;
+	conversationId: string;
+	model: string;
+};
+
 export type WebSocketStreamMessage = {
 	type: "chat.stream.response";
 	eventId: string;
@@ -53,7 +60,8 @@ export type WebSocketConversationTitleMessage = {
 export type WebSocketClientMessage =
 	| WebSocketChatStreamCreateMessage
 	| WebSocketChatStreamCancelMessage
-	| WebSocketConversationTitleMessage;
+	| WebSocketConversationTitleMessage
+	| WebSocketChatRegenerateMessage;
 
 export type WebSocketServerMessage =
 	| WebSocketStreamMessage
@@ -109,6 +117,9 @@ export class WorkersAIDurableObject extends DurableObject<Env> {
 				break;
 			case "chat.stream.cancel":
 				this.abortController.abort();
+				break;
+			case "chat.regenerate":
+				await this.handleRegenerate(ws, parsedMessage);
 				break;
 		}
 	}
@@ -269,6 +280,136 @@ export class WorkersAIDurableObject extends DurableObject<Env> {
 			} catch (wsError) {
 				console.error(
 					`Failed to send error message via WebSocket for conversation ${conversationId}:`,
+					wsError,
+				);
+			}
+		}
+	}
+
+	private async handleRegenerate(
+		ws: WebSocket,
+		parsedMessage: WebSocketChatRegenerateMessage,
+	) {
+		const { eventId, conversationId } = parsedMessage;
+		this.abortController = new AbortController();
+
+		try {
+			const allMessages = await this.db.query.messages.findMany({
+				columns: {
+					id: true,
+					role: true,
+					content: true,
+				},
+				where(fields, operators) {
+					return operators.eq(fields.conversation_id, conversationId);
+				},
+				orderBy(fields, operators) {
+					return operators.asc(fields.created_at);
+				},
+			});
+
+			if (
+				allMessages.length < 2 ||
+				allMessages[allMessages.length - 1].role !== "assistant"
+			) {
+				console.warn(
+					`Cannot regenerate for conversation ${conversationId}: No preceding assistant message found or history too short.`,
+				);
+				ws.send(
+					JSON.stringify({
+						type: "error",
+						eventId,
+						message: "Cannot regenerate the last message.",
+					}),
+				);
+				return;
+			}
+
+			const lastAssistantMessage = allMessages.pop()!;
+			const lastAssistantMessageId = lastAssistantMessage.id;
+			const messagesForRegeneration = allMessages.map(({ role, content }) => ({
+				role: role as "user" | "assistant",
+				content,
+			}));
+
+			const stream = await this.workersAI.chat.completions.create(
+				{
+					model: parsedMessage.model,
+					messages: messagesForRegeneration,
+					stream: true,
+					max_completion_tokens: 10000,
+					reasoning_effort: "low",
+					store: true,
+				},
+				{ signal: this.abortController.signal },
+			);
+
+			let newResponse = "";
+			try {
+				for await (const chunk of stream) {
+					let chunkContent = chunk.choices?.[0]?.delta?.content;
+					if (chunkContent) {
+						newResponse += chunkContent;
+						const streamMessage: WebSocketStreamMessage = {
+							type: "chat.stream.response",
+							eventId,
+							conversationId,
+							content: chunkContent,
+						};
+						ws.send(JSON.stringify(streamMessage));
+					}
+				}
+			} catch (error: unknown) {
+				if (error instanceof Error && error.name === "AbortError") {
+					console.log(
+						`Regeneration stream aborted for conversation ${conversationId}`,
+					);
+					return;
+				} else {
+					console.error(
+						`Error processing regeneration stream for conversation ${conversationId}:`,
+						error,
+					);
+					throw error;
+				}
+			}
+
+			const doneMessage: WebSocketStreamDoneMessage = {
+				type: "chat.stream.done",
+				eventId,
+				conversationId,
+			};
+			ws.send(JSON.stringify(doneMessage));
+
+			await this.db
+				.update(schema.messages)
+				.set({
+					content: newResponse,
+				})
+				.where(eq(schema.messages.id, lastAssistantMessageId));
+
+			await this.db
+				.update(schema.conversations)
+				.set({ updated_at: new Date().toISOString() })
+				.where(eq(schema.conversations.id, conversationId));
+		} catch (error) {
+			console.error(
+				`Error in handleRegenerate for conversation ${conversationId}:`,
+				error,
+			);
+			try {
+				if (ws.readyState === WebSocket.OPEN) {
+					ws.send(
+						JSON.stringify({
+							type: "error",
+							eventId,
+							message: "An internal error occurred during regeneration.",
+						}),
+					);
+				}
+			} catch (wsError) {
+				console.error(
+					`Failed to send error message via WebSocket for regeneration on conversation ${conversationId}:`,
 					wsError,
 				);
 			}

@@ -12,6 +12,13 @@ export type WebSocketChatStreamCancelMessage = {
 	conversationId: string;
 };
 
+export type WebSocketChatRegenerateMessage = {
+	type: "chat.regenerate";
+	eventId: string;
+	conversationId: string;
+	model: string;
+};
+
 export type WebSocketStreamMessage = {
 	type: "chat.stream.response";
 	eventId: string;
@@ -35,7 +42,8 @@ export type WebSocketConversationTitleMessage = {
 export type WebSocketClientMessage =
 	| WebSocketChatStreamCreateMessage
 	| WebSocketChatStreamCancelMessage
-	| WebSocketConversationTitleMessage;
+	| WebSocketConversationTitleMessage
+	| WebSocketChatRegenerateMessage;
 
 export type WebSocketServerMessage =
 	| WebSocketStreamMessage

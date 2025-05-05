@@ -19,10 +19,13 @@ import {
 	UnpinConversationResponseSchema,
 } from "~/gen/chat/v1/chat_pb";
 import { envStore } from "~/store-context";
+import { getTTSChunkingPrompt } from "~/prompts/tts";
 
 const TTSInputSchema = z.object({
 	chunks: z.array(z.string()),
 });
+
+const TTS_SHORT_TEXT_WORD_THRESHOLD = 100;
 
 export const handler = createWorkerHandler({
 	contextValues(req, env, ctx) {
@@ -111,39 +114,53 @@ export const handler = createWorkerHandler({
 					conversationId: req.conversationId,
 				});
 				const response = create(ListMessagesResponseSchema, {
-					messages,
+					messages: messages.map((message) => ({
+						id: message.id,
+						conversationId: message.conversation_id,
+						role: message.role,
+						content: message.content,
+						createdAt: message.created_at ?? undefined,
+					})),
 				});
 				return response;
 			},
 			streamTTS: async function* (req, ctx) {
 				try {
-					const response = await env.AI.run(
-						"@cf/meta/llama-3.1-8b-instruct-fast" as unknown as any,
-						{
-							messages: [
-								{
-									role: "system",
-									content: `You are a helpful assistant that converts long text into short chunks for text to speech.
-									Here is the text: ${req.text}
-									`,
-								},
-							],
-							response_format: zodResponseFormat(TTSInputSchema, "tts_input"),
-						},
-						{
-							gateway: {
-								id: env.CLOUDFLARE_AI_GATEWAY_ID,
-								cacheTtl: 60 * 60 * 24 * 30,
-							},
-						},
-					);
-					const {
-						response: { chunks },
-					} = response as unknown as {
-						response: z.infer<typeof TTSInputSchema>;
-					};
-					for (const chunk of chunks) {
+					const words = req.text.split(/\s+/).filter(Boolean);
+					let chunks: string[];
+
+					if (words.length < TTS_SHORT_TEXT_WORD_THRESHOLD) {
+						chunks = [req.text];
+					} else {
 						const response = await env.AI.run(
+							"@cf/meta/llama-4-scout-17b-16e-instruct" as unknown as any,
+							{
+								messages: [
+									{
+										role: "system",
+										content: getTTSChunkingPrompt(req.text),
+									},
+								],
+								response_format: zodResponseFormat(TTSInputSchema, "tts_input"),
+							},
+							{
+								gateway: {
+									id: env.CLOUDFLARE_AI_GATEWAY_ID,
+									cacheTtl: 60 * 60 * 24 * 30,
+								},
+							},
+						);
+						const result = response as unknown as {
+							response: z.infer<typeof TTSInputSchema>;
+						};
+						chunks = result.response.chunks;
+					}
+
+					for (const chunk of chunks) {
+						if (!chunk || chunk.trim().length === 0) {
+							continue;
+						}
+						const ttsResponse = await env.AI.run(
 							"@cf/myshell-ai/melotts",
 							{
 								prompt: chunk,
@@ -155,10 +172,10 @@ export const handler = createWorkerHandler({
 								},
 							},
 						);
-						const { audio } = response.valueOf() as {
+						const audioData = ttsResponse.valueOf() as {
 							audio: string;
 						};
-						const data = base64ToBytes(audio);
+						const data = base64ToBytes(audioData.audio);
 						yield create(StreamTTSResponseSchema, {
 							audio: data,
 						});
