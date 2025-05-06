@@ -11,7 +11,12 @@ import {
 } from "@chakra-ui/react";
 import { useLocation, useNavigate } from "react-router";
 import { useQuery } from "@tanstack/react-query";
-import { RiBook2Line, RiPushpinLine, RiSearchLine } from "react-icons/ri";
+import {
+	RiBook2Line,
+	RiPushpinLine,
+	RiSearchLine,
+	RiSettingsLine,
+} from "react-icons/ri";
 
 import { chatClient } from "~/connect";
 import { stripProtoMetadata } from "~/types";
@@ -84,7 +89,12 @@ export function SideBar({
 					<Spinner size="sm" />
 				</Center>
 			)}
-			<VStack w="full" overflowY="auto" hidden={isLoadingConversations}>
+			<VStack
+				w="full"
+				flex={1}
+				overflowY="auto"
+				hidden={isLoadingConversations}
+			>
 				<VStack w="full" p={2} gap={0}>
 					<HStack
 						w="full"

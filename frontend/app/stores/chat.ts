@@ -1,5 +1,7 @@
 import { create } from "zustand";
 
+const DEFAULT_MODEL = "@cf/meta/llama-4-scout-17b-16e-instruct";
+
 interface ChatStore {
 	conversationId: string | null;
 	model: string;
@@ -40,8 +42,7 @@ let initialModel: string = "";
 if (typeof window !== "undefined") {
 	const searchParams = new URLSearchParams(window.location.search);
 	initialConversationId = searchParams.get("conversationId");
-	initialModel =
-		searchParams.get("model") ?? "@cf/deepseek-ai/deepseek-r1-distill-qwen-32b";
+	initialModel = searchParams.get("model") ?? DEFAULT_MODEL;
 }
 
 export const useChatStore = create<ChatStore>((set) => ({

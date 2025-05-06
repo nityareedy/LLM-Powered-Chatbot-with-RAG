@@ -11,8 +11,17 @@ export default {
 					status: 400,
 				});
 			}
+			const searchParams = new URL(request.url).searchParams;
+			const accessToken = searchParams.get("accessToken");
+			if (!accessToken) {
+				return new Response("Unauthorized", { status: 401 });
+			}
+			const token = await env.KV.get(`anonymous_access_token:${accessToken}`);
+			if (!token) {
+				return new Response("Unauthorized", { status: 401 });
+			}
 			const id: DurableObjectId =
-				env.WORKERS_AI_DURABLE_OBJECT.idFromName("foo");
+				env.WORKERS_AI_DURABLE_OBJECT.idFromName(accessToken);
 			const stub = env.WORKERS_AI_DURABLE_OBJECT.get(id);
 			return stub.fetch(request);
 		}

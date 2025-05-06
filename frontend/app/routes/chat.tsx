@@ -51,8 +51,6 @@ export default function Chat() {
 		.pop();
 	const lastAssistantMessageId = lastAssistantMessage?.id;
 
-	console.log("lastAssistantMessageId: ", lastAssistantMessageId);
-
 	useEffect(() => {
 		messageEndRef.current?.scrollIntoView({ behavior: "instant" });
 	}, [messages, streamContent]);

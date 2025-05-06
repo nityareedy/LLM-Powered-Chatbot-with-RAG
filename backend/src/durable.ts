@@ -8,6 +8,7 @@ import { OpenAI } from "openai";
 import { z } from "zod";
 import { eq } from "drizzle-orm";
 import { zodResponseFormat } from "openai/helpers/zod";
+import type { ChatCompletionTool } from "openai/resources/chat/completions";
 
 const ConversationTitleExtraction = z.object({
 	title: z.string(),
@@ -22,6 +23,7 @@ export type WebSocketChatStreamCreateMessage = {
 	conversationId: string;
 	content: string;
 	model: string;
+	tools: Array<ChatCompletionTool>;
 };
 
 export type WebSocketChatStreamCancelMessage = {
@@ -35,6 +37,7 @@ export type WebSocketChatRegenerateMessage = {
 	eventId: string;
 	conversationId: string;
 	model: string;
+	tools: Array<ChatCompletionTool>;
 };
 
 export type WebSocketStreamMessage = {
@@ -48,6 +51,10 @@ export type WebSocketStreamDoneMessage = {
 	type: "chat.stream.done";
 	eventId: string;
 	conversationId: string;
+	function_call: {
+		name: string;
+		arguments: string;
+	} | null;
 };
 
 export type WebSocketConversationTitleMessage = {
@@ -124,6 +131,7 @@ export class WorkersAIDurableObject extends DurableObject<Env> {
 		}
 	}
 
+	// workers ai doesn't support openai entrypoint tools
 	private async handleChat(
 		ws: WebSocket,
 		parsedMessage: WebSocketChatStreamCreateMessage,
@@ -172,8 +180,14 @@ export class WorkersAIDurableObject extends DurableObject<Env> {
 			);
 			let response = "";
 			try {
+				const toolCallMap = new Map<
+					number,
+					OpenAI.Chat.Completions.ChatCompletionChunk.Choice.Delta.ToolCall
+				>();
 				for await (const chunk of stream) {
-					let chunkContent = chunk.choices[0].delta.content;
+					const delta = chunk.choices[0].delta;
+					console.log(delta);
+					let chunkContent = delta.content;
 					if (chunkContent) {
 						response += chunkContent;
 						const streamMessage: WebSocketStreamMessage = {
@@ -183,6 +197,53 @@ export class WorkersAIDurableObject extends DurableObject<Env> {
 							content: chunkContent,
 						};
 						ws.send(JSON.stringify(streamMessage));
+					}
+					for (const toolCall of delta.tool_calls ?? []) {
+						const existingToolCall = toolCallMap.get(toolCall.index);
+						if (existingToolCall) {
+							if (toolCall.function?.name) {
+								existingToolCall.function = existingToolCall.function || {};
+								existingToolCall.function.name = toolCall.function.name;
+							}
+							if (toolCall.function?.arguments) {
+								existingToolCall.function = existingToolCall.function || {};
+								existingToolCall.function.arguments =
+									(existingToolCall.function.arguments || "") +
+									toolCall.function.arguments;
+							}
+							if (toolCall.id) {
+								existingToolCall.id = toolCall.id;
+							}
+							if (toolCall.type) {
+								existingToolCall.type = toolCall.type;
+							}
+						} else {
+							toolCallMap.set(toolCall.index, {
+								index: toolCall.index,
+								id: toolCall.id,
+								type: toolCall.type,
+								function: {
+									name: toolCall.function?.name,
+									arguments: toolCall.function?.arguments || "",
+								},
+							});
+						}
+					}
+					if (toolCallMap.size > 0) {
+						const toolCall = Array.from(toolCallMap.values())[0];
+						const name = toolCall?.function?.name;
+						if (name) {
+							const doneMessage: WebSocketStreamDoneMessage = {
+								type: "chat.stream.done",
+								eventId,
+								conversationId,
+								function_call: {
+									name,
+									arguments: toolCall?.function?.arguments || "",
+								},
+							};
+							ws.send(JSON.stringify(doneMessage));
+						}
 					}
 				}
 			} catch (error: unknown) {
@@ -200,6 +261,7 @@ export class WorkersAIDurableObject extends DurableObject<Env> {
 				type: "chat.stream.done",
 				eventId,
 				conversationId,
+				function_call: null,
 			};
 			ws.send(JSON.stringify(doneMessage));
 			await this.db.insert(schema.messages).values({
@@ -341,7 +403,12 @@ export class WorkersAIDurableObject extends DurableObject<Env> {
 					reasoning_effort: "low",
 					store: true,
 				},
-				{ signal: this.abortController.signal },
+				{
+					signal: this.abortController.signal,
+					headers: {
+						"cf-aig-skip-cache": "true",
+					},
+				},
 			);
 
 			let newResponse = "";
@@ -378,6 +445,7 @@ export class WorkersAIDurableObject extends DurableObject<Env> {
 				type: "chat.stream.done",
 				eventId,
 				conversationId,
+				function_call: null,
 			};
 			ws.send(JSON.stringify(doneMessage));
 

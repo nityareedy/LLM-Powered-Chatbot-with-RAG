@@ -6,10 +6,18 @@ import { useChatStore } from "~/stores/chat";
 import { addQueryMessage, updateConversationTitle } from "~/utils/query";
 import { SideBar } from "~/components/sidebar";
 import { RenameDialog } from "~/components/rename-dialog";
+import { chatClient } from "~/connect";
 
 export async function clientLoader() {
+	let accessToken = localStorage.getItem("accessToken");
+	if (!accessToken) {
+		const response = await chatClient.anonymousRegister({});
+		accessToken = response.accessToken;
+		localStorage.setItem("accessToken", accessToken);
+	}
 	const webSocketUrl = import.meta.env.VITE_WEBSOCKET_URL;
-	WebSocketClient.initialize(webSocketUrl);
+	WebSocketClient.initialize(`${webSocketUrl}?accessToken=${accessToken}`);
+
 	const webSocket = WebSocketClient.getInstance();
 	webSocket.on("chat.stream.response", (data) => {
 		const content = data.content;

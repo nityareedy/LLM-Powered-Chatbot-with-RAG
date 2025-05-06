@@ -90,6 +90,7 @@ export function ChatInput() {
 			conversationId: convId,
 			content,
 			model: useChatStore.getState().model,
+			tools: [],
 		});
 		setContent("");
 	}

@@ -1,11 +1,18 @@
 import { env } from "cloudflare:workers";
-import { createContextValues } from "@connectrpc/connect";
+import {
+	Code,
+	ConnectError,
+	createContextValues,
+	HandlerContext,
+	Interceptor,
+} from "@connectrpc/connect";
 import { create } from "@bufbuild/protobuf";
 import { z } from "zod";
 import { zodResponseFormat } from "openai/helpers/zod";
 
 import { createWorkerHandler } from "~/connectrpc-handler";
 import {
+	AnonymousRegisterResponseSchema,
 	ChatService,
 	CreateConversationResponseSchema,
 	DeleteConversationResponseSchema,
@@ -18,7 +25,7 @@ import {
 	StreamTTSResponseSchema,
 	UnpinConversationResponseSchema,
 } from "~/gen/chat/v1/chat_pb";
-import { envStore } from "~/store-context";
+import { userStore } from "~/store-context";
 import { getTTSChunkingPrompt } from "~/prompts/tts";
 
 const TTSInputSchema = z.object({
@@ -27,10 +34,44 @@ const TTSInputSchema = z.object({
 
 const TTS_SHORT_TEXT_WORD_THRESHOLD = 100;
 
+const PUBLIC_ROUTES = ["anonymousRegister"];
+
+const anonymousInterceptor: Interceptor = (next) => async (req) => {
+	if (PUBLIC_ROUTES.includes(req.method.name)) {
+		return next(req);
+	}
+	const accessToken = req.header.get("authorization");
+	if (accessToken) {
+		const token = await env.KV.get(`anonymous_access_token:${accessToken}`);
+		if (!token) {
+			throw new ConnectError("Unauthorized", Code.Unauthenticated);
+		}
+	}
+	const userCtx = req.contextValues.get(userStore);
+	if (!userCtx) {
+		throw new ConnectError("No user context", Code.Internal);
+	}
+	req.contextValues.set(userStore, {
+		accessToken,
+	});
+	return next(req);
+};
+
+function getUserAccessToken(ctx: HandlerContext) {
+	const userCtx = ctx.values.get(userStore);
+	if (!userCtx) {
+		throw new ConnectError("No user context", Code.Internal);
+	}
+	return userCtx.accessToken;
+}
+
 export const handler = createWorkerHandler({
 	contextValues(req, env, ctx) {
-		return createContextValues().set(envStore, env);
+		return createContextValues().set(userStore, {
+			accessToken: "",
+		});
 	},
+	interceptors: [anonymousInterceptor],
 	routes(router) {
 		router.service(ChatService, {
 			listModels: async (req, ctx) => {
@@ -47,8 +88,9 @@ export const handler = createWorkerHandler({
 				return response;
 			},
 			listConversations: async (req, ctx) => {
+				const accessToken = getUserAccessToken(ctx);
 				const id: DurableObjectId =
-					env.WORKERS_AI_DURABLE_OBJECT.idFromName("foo");
+					env.WORKERS_AI_DURABLE_OBJECT.idFromName(accessToken);
 				const stub = env.WORKERS_AI_DURABLE_OBJECT.get(id);
 				const conversations = await stub.listConversations();
 				const response = create(ListConversationsResponseSchema, {
@@ -63,8 +105,9 @@ export const handler = createWorkerHandler({
 				return response;
 			},
 			createConversation: async (req, ctx) => {
+				const accessToken = getUserAccessToken(ctx);
 				const id: DurableObjectId =
-					env.WORKERS_AI_DURABLE_OBJECT.idFromName("foo");
+					env.WORKERS_AI_DURABLE_OBJECT.idFromName(accessToken);
 				const stub = env.WORKERS_AI_DURABLE_OBJECT.get(id);
 				const conversation = await stub.createConversation();
 				const response = create(CreateConversationResponseSchema, {
@@ -79,36 +122,41 @@ export const handler = createWorkerHandler({
 				return response;
 			},
 			deleteConversation: async (req, ctx) => {
+				const accessToken = getUserAccessToken(ctx);
 				const id: DurableObjectId =
-					env.WORKERS_AI_DURABLE_OBJECT.idFromName("foo");
+					env.WORKERS_AI_DURABLE_OBJECT.idFromName(accessToken);
 				const stub = env.WORKERS_AI_DURABLE_OBJECT.get(id);
 				await stub.deleteConversation(req.conversationId);
 				return create(DeleteConversationResponseSchema, {});
 			},
 			renameConversation: async (req, ctx) => {
+				const accessToken = getUserAccessToken(ctx);
 				const id: DurableObjectId =
-					env.WORKERS_AI_DURABLE_OBJECT.idFromName("foo");
+					env.WORKERS_AI_DURABLE_OBJECT.idFromName(accessToken);
 				const stub = env.WORKERS_AI_DURABLE_OBJECT.get(id);
 				await stub.renameConversation(req.conversationId, req.title);
 				return create(RenameConversationResponseSchema, {});
 			},
 			pinConversation: async (req, ctx) => {
+				const accessToken = getUserAccessToken(ctx);
 				const id: DurableObjectId =
-					env.WORKERS_AI_DURABLE_OBJECT.idFromName("foo");
+					env.WORKERS_AI_DURABLE_OBJECT.idFromName(accessToken);
 				const stub = env.WORKERS_AI_DURABLE_OBJECT.get(id);
 				await stub.pinConversation(req.conversationId);
 				return create(PinConversationResponseSchema, {});
 			},
 			unpinConversation: async (req, ctx) => {
+				const accessToken = getUserAccessToken(ctx);
 				const id: DurableObjectId =
-					env.WORKERS_AI_DURABLE_OBJECT.idFromName("foo");
+					env.WORKERS_AI_DURABLE_OBJECT.idFromName(accessToken);
 				const stub = env.WORKERS_AI_DURABLE_OBJECT.get(id);
 				await stub.unpinConversation(req.conversationId);
 				return create(UnpinConversationResponseSchema, {});
 			},
 			listMessages: async (req, ctx) => {
+				const accessToken = getUserAccessToken(ctx);
 				const id: DurableObjectId =
-					env.WORKERS_AI_DURABLE_OBJECT.idFromName("foo");
+					env.WORKERS_AI_DURABLE_OBJECT.idFromName(accessToken);
 				const stub = env.WORKERS_AI_DURABLE_OBJECT.get(id);
 				const messages = await stub.listMessages({
 					conversationId: req.conversationId,
@@ -190,6 +238,18 @@ export const handler = createWorkerHandler({
 				});
 				return create(SpeechToTextResponseSchema, {
 					text: result.text,
+				});
+			},
+			anonymousRegister: async (req, ctx) => {
+				const accessToken = crypto.randomUUID();
+				const key = `anonymous_access_token:${accessToken}`;
+				const existingToken = await env.KV.get(key);
+				if (existingToken) {
+					throw new ConnectError("Unauthorized", Code.Unauthenticated);
+				}
+				await env.KV.put(key, accessToken);
+				return create(AnonymousRegisterResponseSchema, {
+					accessToken,
 				});
 			},
 		});

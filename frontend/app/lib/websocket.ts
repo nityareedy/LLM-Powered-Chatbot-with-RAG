@@ -1,9 +1,12 @@
+import type { ChatCompletionTool } from "openai/resources/chat/completions";
+
 export type WebSocketChatStreamCreateMessage = {
 	type: "chat.stream.create";
 	eventId: string;
 	conversationId: string;
 	content: string;
 	model: string;
+	tools: Array<ChatCompletionTool>;
 };
 
 export type WebSocketChatStreamCancelMessage = {
@@ -17,6 +20,7 @@ export type WebSocketChatRegenerateMessage = {
 	eventId: string;
 	conversationId: string;
 	model: string;
+	tools: Array<ChatCompletionTool>;
 };
 
 export type WebSocketStreamMessage = {
@@ -30,6 +34,10 @@ export type WebSocketStreamDoneMessage = {
 	type: "chat.stream.done";
 	eventId: string;
 	conversationId: string;
+	function_call: {
+		name: string;
+		arguments: string;
+	} | null;
 };
 
 export type WebSocketConversationTitleMessage = {

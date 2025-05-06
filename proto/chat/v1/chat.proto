@@ -13,6 +13,7 @@ service ChatService {
   rpc ListMessages(ListMessagesRequest) returns (ListMessagesResponse);
   rpc StreamTTS(StreamTTSRequest) returns (stream StreamTTSResponse);
   rpc SpeechToText(SpeechToTextRequest) returns (SpeechToTextResponse);
+  rpc AnonymousRegister(AnonymousRegisterRequest) returns (AnonymousRegisterResponse);
 }
 
 message Model {
@@ -102,4 +103,10 @@ message SpeechToTextRequest {
 
 message SpeechToTextResponse {
   string text = 1;
+}
+
+message AnonymousRegisterRequest {}
+
+message AnonymousRegisterResponse {
+  string access_token = 1;
 }

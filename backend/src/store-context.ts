@@ -1,3 +1,7 @@
 import { createContextKey } from "@connectrpc/connect";
 
-export const envStore = createContextKey<Env | undefined>(undefined);
+type User = {
+	accessToken: string;
+};
+
+export const userStore = createContextKey<User | undefined>(undefined);
