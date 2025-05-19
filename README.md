@@ -51,10 +51,7 @@ This is a demo project showcasing a full-stack chat application built entirely o
     git clone https://github.com/akazwz/workersai.git
     cd workersai
     ```
-2.  **Configure Cloudflare:**
-    *   Set up necessary Cloudflare resources (KV namespace, Durable Object binding, AI Gateway).
-    *   Create a `.dev.vars` file in the `backend/` directory with your Cloudflare credentials and bindings (refer to `backend/wrangler.jsonc`).
-3.  **Install Dependencies:**
+2.  **Install Dependencies:**
     ```bash
     # From the root directory
     pnpm install
@@ -63,25 +60,46 @@ This is a demo project showcasing a full-stack chat application built entirely o
     cd ../frontend && pnpm install
     cd ..
     ```
-4.  **Generate Protobuf Code (if needed):**
+3.  **Configure Backend Environment Variables:**
+    *   Navigate to the `backend` directory.
+    *   Copy the example environment file: `cp .dev.vars.example .dev.vars`
+    *   Edit `.dev.vars` and fill in your Cloudflare credentials and bindings (refer to `wrangler.jsonc` for required variables).
+4.  **Build Frontend Assets:**
+    ```bash
+    cd frontend
+    pnpm run build
+    cd ..
+    ```
+5.  **Configure Cloudflare Resources:**
+    *   Set up necessary Cloudflare resources (KV namespace, Durable Object binding, AI Gateway). This step might involve using the Cloudflare dashboard or Wrangler commands. Ensure the bindings in `backend/wrangler.jsonc` and `.dev.vars` match these resources.
+6.  **Generate Protobuf Code (if needed):**
     ```bash
     buf generate
     ```
 
 ### Running Locally
 
+**Important:** Before starting the backend worker, you **must** build the frontend assets. This is done in **Setup step 4**:
+```bash
+# Ensure you are in the project root directory
+cd frontend
+pnpm run build
+cd ..
+```
+This step is crucial for the backend to serve static assets correctly and to prevent startup errors. Also, ensure you have configured your `backend/.dev.vars` file as per **Setup step 3**.
+
 1.  **Start the backend worker (using Wrangler):**
     ```bash
     cd backend
     pnpm run dev
     ```
-2.  **Start the frontend development server:**
+2.  **Start the frontend development server (optional, if you want to make frontend changes and see them live):**
     ```bash
     cd frontend
     pnpm run dev
     ```
 
-The application should now be accessible (usually at `http://localhost:5173` based on the frontend README).
+The application should now be accessible (usually at `http://localhost:8787` for the backend worker, which serves the frontend assets. If you run the frontend dev server, it's often at `http://localhost:5173`).
 
 ## Deployment
 
