@@ -62,31 +62,43 @@ This is a demo project showcasing a full-stack chat application built entirely o
     ```
 3.  **Configure Backend Environment Variables:**
     *   Navigate to the `backend` directory.
-    *   Copy the example environment file: `cp .dev.vars.example .dev.vars`
+    *   Copy the provided example environment file: `cp .dev.vars.example .dev.vars`
     *   Edit `.dev.vars` and fill in your Cloudflare credentials and bindings (refer to `wrangler.jsonc` for required variables).
-4.  **Build Frontend Assets:**
+    *   Return to the project root directory: `cd ..`
+4.  **Configure Frontend Environment Variables:**
+    *   The `frontend` directory now includes a `.env` file with default/example settings.
+    *   For local development, it is recommended to copy this file to `.env.local` within the `frontend` directory:
+        ```bash
+        cp frontend/.env frontend/.env.local
+        ```
+    *   Then, customize `frontend/.env.local` with your specific settings (e.g., `VITE_API_URL` if it needs to differ from the default). The `.env.local` file will override `frontend/.env` and is typically gitignored.
+    *   If you don't create a `.env.local`, ensure the values in `frontend/.env` are suitable for your local setup.
+5.  **Build Frontend Assets:**
     ```bash
     cd frontend
     pnpm run build
     cd ..
     ```
-5.  **Configure Cloudflare Resources:**
+6.  **Configure Cloudflare Resources:**
     *   Set up necessary Cloudflare resources (KV namespace, Durable Object binding, AI Gateway). This step might involve using the Cloudflare dashboard or Wrangler commands. Ensure the bindings in `backend/wrangler.jsonc` and `.dev.vars` match these resources.
-6.  **Generate Protobuf Code (if needed):**
+7.  **Generate Protobuf Code (if needed):**
     ```bash
     buf generate
     ```
 
 ### Running Locally
 
-**Important:** Before starting the backend worker, you **must** build the frontend assets. This is done in **Setup step 4**:
-```bash
-# Ensure you are in the project root directory
-cd frontend
-pnpm run build
-cd ..
-```
-This step is crucial for the backend to serve static assets correctly and to prevent startup errors. Also, ensure you have configured your `backend/.dev.vars` file as per **Setup step 3**.
+**Important:** Before starting the backend worker, ensure you have:
+1. Configured your `backend/.dev.vars` file (as per **Setup step 3**).
+2. Configured your frontend environment by checking/copying `frontend/.env` to `frontend/.env.local` and customizing it if needed (as per **Setup step 4**).
+3. Built the frontend assets (as per **Setup step 5**):
+    ```bash
+    # Ensure you are in the project root directory
+    cd frontend
+    pnpm run build
+    cd ..
+    ```
+These steps are crucial for the application to run correctly.
 
 1.  **Start the backend worker (using Wrangler):**
     ```bash
