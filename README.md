@@ -44,47 +44,6 @@ This is a demo project showcasing a full-stack chat application built entirely o
 *   Wrangler CLI
 *   Buf CLI (optional, for protobuf generation)
 
-### Setup
-
-1.  **Clone the repository:**
-    ```bash
-    git clone https://github.com/akazwz/workersai.git
-    cd workersai
-    ```
-2.  **Install Dependencies:**
-    ```bash
-    # From the root directory
-    pnpm install
-    # Navigate to backend and frontend to ensure all deps are installed if needed
-    cd backend && pnpm install
-    cd ../frontend && pnpm install
-    cd ..
-    ```
-3.  **Configure Backend Environment Variables:**
-    *   Navigate to the `backend` directory.
-    *   Copy the provided example environment file: `cp .dev.vars.example .dev.vars`
-    *   Edit `.dev.vars` and fill in your Cloudflare credentials and bindings (refer to `wrangler.jsonc` for required variables).
-    *   Return to the project root directory: `cd ..`
-4.  **Configure Frontend Environment Variables:**
-    *   The `frontend` directory now includes a `.env` file with default/example settings.
-    *   For local development, it is recommended to copy this file to `.env.local` within the `frontend` directory:
-        ```bash
-        cp frontend/.env frontend/.env.local
-        ```
-    *   Then, customize `frontend/.env.local` with your specific settings (e.g., `VITE_API_URL` if it needs to differ from the default). The `.env.local` file will override `frontend/.env` and is typically gitignored.
-    *   If you don't create a `.env.local`, ensure the values in `frontend/.env` are suitable for your local setup.
-5.  **Build Frontend Assets:**
-    ```bash
-    cd frontend
-    pnpm run build
-    cd ..
-    ```
-6.  **Configure Cloudflare Resources:**
-    *   Set up necessary Cloudflare resources (KV namespace, Durable Object binding, AI Gateway). This step might involve using the Cloudflare dashboard or Wrangler commands. Ensure the bindings in `backend/wrangler.jsonc` and `.dev.vars` match these resources.
-7.  **Generate Protobuf Code (if needed):**
-    ```bash
-    buf generate
-    ```
 
 ### Running Locally
 
